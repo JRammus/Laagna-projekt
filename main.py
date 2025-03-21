@@ -246,7 +246,7 @@ while not game_over:
 
     if game_ended:
         screen.fill(BLACK)  # Clear screen
-        message = game_over_font.render("SA VALLUTASID KOSMOST!", True, WHITE)
+        message = game_over_font.render("SA VALLUTASID KOSMOSE!", True, WHITE)
         screen.blit(message, (SCREEN_WIDTH // 2 - message.get_width() // 2, SCREEN_HEIGHT // 2 - message.get_height() // 2))
 
         # Wait for 3 seconds before quitting
