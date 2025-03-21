@@ -37,7 +37,7 @@ konami_code_triggered = False
 game_folder = os.getcwd()
 player_image = pygame.image.load(os.path.join(game_folder, "player_ship.png"))
 bullet_image = pygame.image.load(os.path.join(game_folder, "bullet1.png"))
-enemy_image = pygame.image.load(os.path.join(game_folder, "enemy_ship.png"))
+enemy_image = pygame.image.load(os.path.join(game_folder, "enemy_ship1.png"))
 upgrade_image = pygame.image.load(os.path.join(game_folder, "upgrade.png"))
 boss_image = pygame.image.load(os.path.join(game_folder, "boss_ship1.png"))  # Boss ship image
 
