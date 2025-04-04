@@ -1,4 +1,4 @@
-import pygame  
+import pygame
 import random
 import os
 
@@ -27,6 +27,9 @@ boost_time = 0
 boost_duration = 5000  # 5 seconds in milliseconds
 boss_flash_timer = 0  # Boss flash effect duration
 game_ended = False  # Track if the game has ended due to score
+nitro_active = False
+nitro_time = 0
+nitro_duration = 5000  # 5 seconds in milliseconds
 
 # Konami code detection
 konami_code = [pygame.K_UP, pygame.K_UP, pygame.K_DOWN, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT, pygame.K_LEFT, pygame.K_RIGHT, pygame.K_b, pygame.K_a]
@@ -35,18 +38,22 @@ konami_code_triggered = False
 
 # Load images
 game_folder = os.getcwd()
-player_image = pygame.image.load(os.path.join(game_folder, "player_ship.png"))
+player_image = pygame.image.load(os.path.join(game_folder, "player_ship1.png"))
+player_nitro_image = pygame.image.load(os.path.join(game_folder, "player_nitro.png"))
 bullet_image = pygame.image.load(os.path.join(game_folder, "bullet1.png"))
 enemy_image = pygame.image.load(os.path.join(game_folder, "enemy_ship1.png"))
 upgrade_image = pygame.image.load(os.path.join(game_folder, "upgrade.png"))
+nitro_upgrade_image = pygame.image.load(os.path.join(game_folder, "nitro_upgrade.png"))  # New image for nitro upgrade
 boss_image = pygame.image.load(os.path.join(game_folder, "boss_ship1.png"))  # Boss ship image
 
 # Resize images
 player_image = pygame.transform.scale(player_image, (84, 84))
+player_nitro_image = pygame.transform.scale(player_nitro_image, (94, 94))  # nitro player image
 bullet_image = pygame.transform.scale(bullet_image, (30, 60))
 enemy_image = pygame.transform.scale(enemy_image, (64, 64))
 boss_image = pygame.transform.scale(boss_image, (192, 192))  # Resize boss ship
 upgrade_image = pygame.transform.scale(upgrade_image, (72, 72))  # 1.5x bigger
+nitro_upgrade_image = pygame.transform.scale(nitro_upgrade_image, (72, 72))  # Resized nitro upgrade
 
 # Font for displaying score and lives
 font = pygame.font.Font(None, 50)
@@ -58,6 +65,7 @@ class Player(pygame.sprite.Sprite):
         super().__init__()
         self.image = player_image
         self.rect = self.image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 80))
+        self.health = 100  # Initial health (this will be overridden by the Konami Code)
 
     def update(self, keys):
         if keys[pygame.K_LEFT] and self.rect.left > 0:
@@ -68,6 +76,21 @@ class Player(pygame.sprite.Sprite):
             self.rect.y -= player_speed
         if keys[pygame.K_DOWN] and self.rect.bottom < SCREEN_HEIGHT:
             self.rect.y += player_speed
+
+    def activate_nitro(self):
+        self.image = player_nitro_image  # Change to nitro image
+        global nitro_active, nitro_time
+        nitro_active = True
+        nitro_time = pygame.time.get_ticks()
+
+    def deactivate_nitro(self):
+        self.image = player_image  # Revert to normal image
+        global nitro_active
+        nitro_active = False
+
+    def reset_health(self):
+        self.health = 500  # Set health to 500
+
 
 # Bullet class
 class Bullet(pygame.sprite.Sprite):
@@ -131,11 +154,24 @@ class Boss(pygame.sprite.Sprite):
             return True
         return False
 
-# Upgrade class
+# Upgrade class for normal upgrades
 class Upgrade(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
         self.image = upgrade_image
+        self.rect = self.image.get_rect(center=(random.randint(50, SCREEN_WIDTH - 50), -50))
+        self.speed = 3
+
+    def update(self):
+        self.rect.y += self.speed
+        if self.rect.top > SCREEN_HEIGHT:
+            self.kill()
+
+# nitro upgrade class
+class nitroUpgrade(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = nitro_upgrade_image
         self.rect = self.image.get_rect(center=(random.randint(50, SCREEN_WIDTH - 50), -50))
         self.speed = 3
 
@@ -152,13 +188,18 @@ enemy_bullets = pygame.sprite.Group()
 enemies = pygame.sprite.Group()
 bosses = pygame.sprite.Group()
 upgrades = pygame.sprite.Group()
+nitro_upgrades = pygame.sprite.Group()  # Group for nitro upgrades
 
-# Spawn events
+# Spawn events with 1.3x increased spawn rates
 enemy_spawn_event = pygame.USEREVENT + 1
-pygame.time.set_timer(enemy_spawn_event, 750)
+pygame.time.set_timer(enemy_spawn_event, int(750 * 1.3))  # Increase by 1.3x (750 * 1.3)
 
 upgrade_spawn_event = pygame.USEREVENT + 2
-pygame.time.set_timer(upgrade_spawn_event, 10000)
+pygame.time.set_timer(upgrade_spawn_event, int(10000 * 1.2))  # Decrease by 1.2x (10000 * 1.2)
+
+# nitro upgrade spawn event with 1.7x increased spawn rate
+nitro_upgrade_spawn_event = pygame.USEREVENT + 3
+pygame.time.set_timer(nitro_upgrade_spawn_event, int(15000 / 2))  # Increase by 1.7x (15000 * 1.7)
 
 # Game loop
 clock = pygame.time.Clock()
@@ -175,28 +216,45 @@ while not game_over:
             if len(konami_input) > len(konami_code):
                 konami_input.pop(0)
             if konami_input == konami_code and not konami_code_triggered:
-                player_lives = 1000  # Set 1000 lives
-                boost_active = True  # Make upgrades permanent
+                player.reset_health()  # Set player health to 500
+                player.activate_nitro()  # Give player permanent nitro
+                boost_active = True  # Permanent upgrades after Konami code
                 konami_code_triggered = True
                 print("Konami Code Activated!")
-            
+                player_lives = 1000  # Set 1000 lives (not really needed but here for fun)
+
             if event.key == pygame.K_ESCAPE:
                 game_over = True
             if event.key == pygame.K_SPACE:
-                if boost_active:
-                    bullets.add(Bullet(player.rect.centerx - 15, player.rect.top, -1))
-                    bullets.add(Bullet(player.rect.centerx + 15, player.rect.top, -1))
+                # Make the player shoot 5 bullets when Konami Code is triggered
+                if konami_code_triggered:
+                    for i in range(5):
+                        # Fire 5 bullets from the player position
+                        bullets.add(Bullet(player.rect.centerx - 15, player.rect.top, -1))
+                        bullets.add(Bullet(player.rect.centerx + 15, player.rect.top, -1))
                 else:
-                    bullets.add(Bullet(player.rect.centerx, player.rect.top, -1))
+                    # Normal single bullet firing logic
+                    if boost_active:
+                        bullets.add(Bullet(player.rect.centerx - 15, player.rect.top, -1))
+                        bullets.add(Bullet(player.rect.centerx + 15, player.rect.top, -1))
+                    else:
+                        bullets.add(Bullet(player.rect.centerx, player.rect.top, -1))
+
         elif event.type == enemy_spawn_event and not boss_active:
             enemies.add(Enemy())
         elif event.type == upgrade_spawn_event:
             upgrades.add(Upgrade())
+        elif event.type == nitro_upgrade_spawn_event:
+            nitro_upgrades.add(nitroUpgrade())  # nitro upgrade event
 
-    # Check if boss should spawn
-    if player_score % 30 == 0 and player_score > 0 and not boss_active:
+    # Spawn boss if score is high enough
+    if player_score >= 30 and not boss_active:
         boss_active = True
-        bosses.add(Boss())
+        bosses.add(Boss())  # Add the boss to the bosses group
+
+    # Handle nitro upgrade collection
+    for nitro_upgrade in pygame.sprite.spritecollide(player, nitro_upgrades, True):
+        player.activate_nitro()
 
     # Handle upgrade collection
     for upgrade in pygame.sprite.spritecollide(player, upgrades, True):
@@ -212,6 +270,10 @@ while not game_over:
     if not konami_code_triggered and boost_active and pygame.time.get_ticks() - boost_time > boost_duration:
         boost_active = False
 
+    # Check if nitro has expired
+    if nitro_active and pygame.time.get_ticks() - nitro_time > nitro_duration:
+        player.deactivate_nitro()
+
     # Update player
     keys = pygame.key.get_pressed()
     player.update(keys)
@@ -222,9 +284,10 @@ while not game_over:
     enemies.update()
     bosses.update()
     upgrades.update()
+    nitro_upgrades.update()  # Update nitro upgrades
 
-    # Handle bullet collisions
-    if pygame.sprite.spritecollide(player, enemy_bullets, True):
+    # Handle bullet collisions with nitro protection
+    if pygame.sprite.spritecollide(player, enemy_bullets, True) and not nitro_active:
         player_lives -= 1
         if player_lives <= 0:
             game_over = True
@@ -235,44 +298,43 @@ while not game_over:
     for boss in bosses:
         if pygame.sprite.spritecollide(boss, bullets, True):  
             if boss.take_damage():  
-                player_score += 10
+                player_score += 10  # Add score when boss is defeated
                 boss_active = False
                 boss_flash_timer = 10  
 
-    # Check for score threshold to end the game
+    # Draw UI
+    if not game_ended:
+        screen.blit(font.render(f"Score: {player_score}", True, WHITE), (20, 20))
+        screen.blit(font.render(f"Lives: {player_lives}", True, RED), (SCREEN_WIDTH - 150, 20))
+
+    # End screen if the player reaches a high score
     if player_score >= 100 and not game_ended:
         game_ended = True
-        game_over_time = pygame.time.get_ticks()  # Time when the game ends
+        game_over_time = pygame.time.get_ticks()
 
     if game_ended:
-        screen.fill(BLACK)  # Clear screen
+        screen.fill(BLACK)
         message = game_over_font.render("SA VALLUTASID KOSMOST!", True, WHITE)
         screen.blit(message, (SCREEN_WIDTH // 2 - message.get_width() // 2, SCREEN_HEIGHT // 2 - message.get_height() // 2))
-
-        # Wait for 3 seconds before quitting
         if pygame.time.get_ticks() - game_over_time > 3000:
             game_over = True
 
-    # Draw everything
+    # Draw all sprites
     player_group.draw(screen)
     bullets.draw(screen)
     enemy_bullets.draw(screen)
     enemies.draw(screen)
     bosses.draw(screen)
     upgrades.draw(screen)
+    nitro_upgrades.draw(screen)
 
-    # Flash effect
+    # Boss flash effect
     if boss_flash_timer > 0:
         flash_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         flash_surface.fill(WHITE)
         flash_surface.set_alpha(150)
         screen.blit(flash_surface, (0, 0))
         boss_flash_timer -= 1
-
-    # Draw UI
-    if not game_ended:
-        screen.blit(font.render(f"Score: {player_score}", True, WHITE), (20, 20))
-        screen.blit(font.render(f"Lives: {player_lives}", True, RED), (SCREEN_WIDTH - 150, 20))
 
     pygame.display.flip()
     clock.tick(60)
